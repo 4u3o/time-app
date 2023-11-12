@@ -1,62 +1,51 @@
+require_relative 'time_formatter'
+require 'set'
+
 class App
   def call(env)
     request = Rack::Request.new(env)
-    response = Rack::Response.new
 
-    unless time_request?(request)
-      response.status = 404
-      return response.finish
-    end
+    return response(404) unless time_request?(request)
 
-    response.content_type = 'text/plain'
-    raw_format = request.params['format']
-
-    if raw_format.nil?
-      response.write(Time.now.strftime(FORMAT))
-      return response.finish
-    end
-
-    raw_flags = raw_format.split(',')
-    unknown_flags = raw_flags - FLAGS.keys
+    raw_format = request.params['format'] || DEFAULT_FORMAT
+    unknown_flags = unknown_flags(raw_format)
 
     if unknown_flags.any?
-      response.status = 400
-      response.write("Unknown time format #{unknown_flags}")
-      return response.finish
+      return response(400,
+                      content_type: 'text/plain',
+                      body: "Unknown time format #{unknown_flags}")
     end
 
-    format = create_format(raw_flags)
-    response.status = 200
-    response.write(Time.now.strftime(format))
-
-    response.finish
+    response(200,
+             content_type: 'text/plain',
+             body: TimeFormatter.new(raw_format).now)
   end
 
   private
 
-  FORMAT = '%Y-%m-%d %H:%M:%S'
-  FLAGS = {
-    'year' => '%Y',
-    'month' => '%m',
-    'day' => '%d',
-    'hour' => '%H',
-    'minute' => '%M',
-    'second' => '%S'
-  }
+  DEFAULT_FORMAT = 'year,day,month,hour,minute,second'
   TIME_PATH = '/time'
+  VALID_FLAGS = Set['year', 'day', 'month', 'hour', 'minute', 'second']
+
+  def current_flags(raw_format)
+    raw_format.split(',').to_set
+  end
+
+  def response(status, content_type: '', **options)
+    response = Rack::Response.new
+    response.status = status
+    response.content_type = content_type
+    response.write(options[:body])
+    response.finish
+  end
 
   def time_request?(request)
     request.path == TIME_PATH && request.request_method == 'GET'
   end
 
-  def create_format(raw_flags)
-    format = FORMAT.dup
-    flags = FLAGS.values_at(*raw_flags)
-    unnecessary_flags = FLAGS.values - flags
+  def unknown_flags(raw_format)
+    return [] if raw_format.nil?
 
-    unnecessary_flags.each do |flag|
-      format.sub!(/[-|:]{1}#{flag}|#{flag}[-|:]{1}|#{flag}/, '')
-    end
-    format.strip
+    (current_flags(raw_format) - VALID_FLAGS).to_a
   end
 end
