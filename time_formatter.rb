@@ -1,15 +1,27 @@
+require 'set'
+
 class TimeFormatter
+  attr_reader :unknown_flags
+
   def initialize(format)
     @raw_format = format
+    @raw_flags = format.split(',')
+    @unknown_flags = []
   end
 
   def now
     Time.now.strftime(format)
   end
 
+  def valid?
+    @unknown_flags = (raw_flags.to_set - FLAGS.keys.to_set).to_a
+
+    unknown_flags.empty?
+  end
+
   private
 
-  attr_reader :raw_format
+  attr_reader :raw_format, :raw_flags
 
   FLAGS = {
     'year' => '%Y',
@@ -19,27 +31,8 @@ class TimeFormatter
     'minute' => '%M',
     'second' => '%S'
   }
-  FORMAT = '%Y-%m-%d %H:%M:%S'
-
-  def flags
-    FLAGS.values_at(*raw_flags)
-  end
 
   def format
-    format = FORMAT.dup
-
-    unnecessary_flags.each do |flag|
-      format.sub!(/[-|:]{1}#{flag}|#{flag}[-|:]{1}|#{flag}/, '')
-    end
-
-    format.strip
-  end
-
-  def raw_flags
-    raw_format.split(',')
-  end
-
-  def unnecessary_flags
-    FLAGS.values - flags
+    FLAGS.values_at(*raw_flags).join('-')
   end
 end
